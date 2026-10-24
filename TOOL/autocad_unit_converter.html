@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AutoCAD Unit Converter - ft / inch / mm / meter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f3f4f6;
+    color: #111827;
+    padding: 0 24px 24px;
+  }
+  .tool-switcher { margin:0 -24px 24px; padding:8px 24px; display:flex; align-items:center; gap:6px; overflow-x:auto; white-space:nowrap; background:#fff; border-bottom:1px solid #e1e5eb; scrollbar-width:thin; }
+  .switcher-brand { width:32px;height:32px;display:grid;place-items:center;flex:none;border-radius:9px;background:#2861ed;color:#fff;text-decoration:none;font-size:13px;font-weight:800;letter-spacing:-.06em; }
+  .switcher-item { width:36px;height:36px;display:inline-grid;place-items:center;padding:0;border:1px solid transparent;border-radius:8px;color:#536784;text-decoration:none;flex:none; }
+  .switcher-item svg { width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  a.switcher-item:hover { background:#eef2f8; color:#1e40af; }
+  .switcher-item.active { background:#e8efff; border-color:#d7e2ff; color:#2457e6; }
+  .switcher-item.upcoming { color:#8b96a5; }
+  .card {
+    max-width: 760px;
+    margin: auto;
+    background: #ffffff;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    padding: 24px;
+  }
+  h1 {
+    margin: 0 0 6px;
+    font-size: 24px;
+  }
+  .sub {
+    color: #6b7280;
+    margin-bottom: 20px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+  label {
+    font-size: 13px;
+    font-weight: bold;
+    color: #374151;
+    display: block;
+    margin-bottom: 6px;
+  }
+  input {
+    width: 100%;
+    padding: 13px;
+    font-size: 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    outline: none;
+  }
+  input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+  }
+  .row > div { flex: 1; }
+  .result {
+    margin-top: 22px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .line {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    align-items: center;
+  }
+  .line:last-child { border-bottom: none; }
+  .value {
+    font-weight: bold;
+    text-align: right;
+    word-break: break-word;
+  }
+  button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 9px 12px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  button:hover { background: #1d4ed8; }
+  .small {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 16px;
+    line-height: 1.5;
+  }
+  .quick {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+  }
+  .quick button {
+    background: #e0ecff;
+    color: #1e40af;
+  }
+  @media(max-width: 620px) {
+    body { padding: 0 12px 16px; }
+    .tool-switcher { margin: 0 -12px 16px; padding: 7px 12px; }
+    .card { padding: 18px; border-radius: 14px; }
+    .grid, .quick { grid-template-columns: 1fr; }
+    .line { align-items: flex-start; flex-direction: column; gap: 8px; padding: 12px; }
+    .line > span:last-child { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .value { font-size: 14px; }
+    button { padding: 8px 10px; }
+  }
+  @media(max-width: 360px) {
+    body { padding-left: 8px; padding-right: 8px; }
+    .tool-switcher { margin-left: -8px; margin-right: -8px; padding-left: 8px; padding-right: 8px; }
+    .card { padding: 14px; }
+    h1 { font-size: 21px; }
+  }
+</style>
+</head>
+<body>
+<nav class="tool-switcher" aria-label="Switch between tools">
+  <a class="switcher-brand" href="../index.html" aria-label="FS Tools dashboard" title="FS Tools">FS</a>
+  <a class="switcher-item" href="../index.html" aria-label="Dashboard" title="Dashboard"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10h-6v-7h-4v7H3z"/></svg></a>
+  <a class="switcher-item active" href="autocad_unit_converter.html" aria-label="AutoCAD Converter" title="AutoCAD Converter" aria-current="page"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg></a>
+  <a class="switcher-item" href="classroom-planner.html" aria-label="Classroom Planner" title="Classroom Planner"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M10 10v10"/></svg></a>
+  <span class="switcher-item upcoming" aria-label="Room Measurer, coming soon" title="Room Measurer — coming soon"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h6v10m0-10h10"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="HEX Color, coming soon" title="HEX Color — coming soon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="Paint Estimator, coming soon" title="Paint Estimator — coming soon"><svg viewBox="0 0 24 24"><path d="M4 20h16M6 16 14 4l4 3-8 12H6z"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="Stair Calculator, coming soon" title="Stair Calculator — coming soon"><svg viewBox="0 0 24 24"><path d="M4 19h5v-5h5V9h6"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="Tile Estimator, coming soon" title="Tile Estimator — coming soon"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></span>
+</nav>
+<div class="card">
+  <h1>AutoCAD Unit Converter</h1>
+  <div class="sub">For mm, meter, feet and inch conversion. Best for AutoCAD / furniture work.</div>
+
+  <div class="grid">
+    <div>
+      <label>Feet</label>
+      <input id="feet" type="number" step="any" placeholder="Example: 8">
+    </div>
+    <div>
+      <label>Inches</label>
+      <input id="inch" type="number" step="any" placeholder="Example: 6">
+    </div>
+    <div>
+      <label>Millimeter</label>
+      <input id="mm" type="number" step="any" placeholder="Example: 2438.4">
+    </div>
+    <div>
+      <label>Meter</label>
+      <input id="meter" type="number" step="any" placeholder="Example: 2.438">
+    </div>
+  </div>
+
+  <div class="result">
+    <div class="line">
+      <span>AutoCAD value in mm</span>
+      <span><span class="value" id="outMm">0</span> <button onclick="copyText('outMm')">Copy</button></span>
+    </div>
+    <div class="line">
+      <span>AutoCAD value in meter</span>
+      <span><span class="value" id="outM">0</span> <button onclick="copyText('outM')">Copy</button></span>
+    </div>
+    <div class="line">
+      <span>Feet + Inch</span>
+      <span class="value" id="outFtIn">0'-0&quot;</span>
+    </div>
+    <div class="line">
+      <span>Decimal feet</span>
+      <span class="value" id="outFt">0</span>
+    </div>
+  </div>
+
+  <div class="quick">
+    <button onclick="quickFeet(8)">8 ft → mm</button>
+    <button onclick="quickFeet(10)">10 ft → mm</button>
+    <button onclick="quickMm(600)">600 mm → ft/in</button>
+    <button onclick="quickMm(2400)">2400 mm → ft/in</button>
+  </div>
+
+  <div class="small">
+    Tip: If your AutoCAD file is in <b>mm</b>, copy the mm value. If file is in <b>meter</b>, copy the meter value.<br>
+    Formula: 1 ft = 304.8 mm, 1 inch = 25.4 mm, 1 meter = 1000 mm.
+  </div>
+</div>
+
+<script>
+const feet = document.getElementById('feet');
+const inch = document.getElementById('inch');
+const mm = document.getElementById('mm');
+const meter = document.getElementById('meter');
+const outMm = document.getElementById('outMm');
+const outM = document.getElementById('outM');
+const outFtIn = document.getElementById('outFtIn');
+const outFt = document.getElementById('outFt');
+
+let active = '';
+
+function round(n, d=3) {
+  if (!isFinite(n)) return 0;
+  return Number(n.toFixed(d));
+}
+
+function updateFromFtIn() {
+  const f = parseFloat(feet.value) || 0;
+  const i = parseFloat(inch.value) || 0;
+  const totalMm = (f * 304.8) + (i * 25.4);
+  setOutputs(totalMm);
+  mm.value = totalMm ? round(totalMm, 3) : '';
+  meter.value = totalMm ? round(totalMm / 1000, 4) : '';
+}
+
+function updateFromMm() {
+  const totalMm = parseFloat(mm.value) || 0;
+  setOutputs(totalMm);
+  meter.value = totalMm ? round(totalMm / 1000, 4) : '';
+  const totalInch = totalMm / 25.4;
+  feet.value = totalMm ? Math.floor(totalInch / 12) : '';
+  inch.value = totalMm ? round(totalInch % 12, 3) : '';
+}
+
+function updateFromMeter() {
+  const totalMm = (parseFloat(meter.value) || 0) * 1000;
+  setOutputs(totalMm);
+  mm.value = totalMm ? round(totalMm, 3) : '';
+  const totalInch = totalMm / 25.4;
+  feet.value = totalMm ? Math.floor(totalInch / 12) : '';
+  inch.value = totalMm ? round(totalInch % 12, 3) : '';
+}
+
+function setOutputs(totalMm) {
+  outMm.textContent = round(totalMm, 3);
+  outM.textContent = round(totalMm / 1000, 4);
+  const totalInch = totalMm / 25.4;
+  const f = Math.floor(totalInch / 12);
+  const i = round(totalInch % 12, 3);
+  outFtIn.textContent = `${f}'-${i}"`;
+  outFt.textContent = round(totalMm / 304.8, 4);
+}
+
+feet.addEventListener('input', updateFromFtIn);
+inch.addEventListener('input', updateFromFtIn);
+mm.addEventListener('input', updateFromMm);
+meter.addEventListener('input', updateFromMeter);
+
+function copyText(id) {
+  navigator.clipboard.writeText(document.getElementById(id).textContent);
+}
+
+function quickFeet(f) {
+  feet.value = f;
+  inch.value = 0;
+  updateFromFtIn();
+}
+function quickMm(v) {
+  mm.value = v;
+  updateFromMm();
+}
+</script>
+</body>
+</html>

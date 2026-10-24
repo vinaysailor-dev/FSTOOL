@@ -45,13 +45,27 @@
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--t1);height:100vh;display:flex;flex-direction:column;overflow:hidden;font-size:13px;}
+body{font-family:'Outfit',system-ui,sans-serif;background:var(--bg);color:var(--t1);height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-size:13px;}
 
 /* ── HEADER ── */
 header{
   height:44px;background:var(--surface);border-bottom:1px solid var(--border);
   display:flex;align-items:center;padding:0 14px;gap:10px;flex-shrink:0;z-index:20;
 }
+.tool-switcher{
+  height:42px;min-height:42px;background:var(--surface2);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:6px;padding:4px 12px;overflow-x:auto;overflow-y:hidden;
+  flex-shrink:0;scrollbar-width:thin;z-index:19;
+}
+.switcher-brand{width:30px;height:30px;display:grid;place-items:center;flex:none;border-radius:8px;background:var(--accent);color:#fff;text-decoration:none;font-size:12px;font-weight:800;letter-spacing:-.06em;box-shadow:var(--sh2);}
+.switcher-item{
+  width:34px;height:32px;display:inline-grid;place-items:center;padding:0;
+  border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--t2);text-decoration:none;flex:none;
+}
+.switcher-item svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.switcher-item:hover{background:var(--surface2);color:var(--accent-t);}
+.switcher-item.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent-t);}
+.switcher-item.upcoming{color:var(--t3);background:transparent;border-style:dashed;}
 .back-link{
   display:flex;align-items:center;gap:5px;
   color:var(--t3);font-size:12px;font-weight:500;text-decoration:none;
@@ -226,17 +240,20 @@ header{
   body{font-size:12px;}
   header{padding:0 10px;gap:7px;}
   .back-link{padding:3px 7px;font-size:11px;}
+  .tool-switcher{height:40px;min-height:40px;padding:3px 8px;gap:4px;}
+  .switcher-item{width:32px;height:30px;}
+  .switcher-brand{width:28px;height:28px;}
 
   /* Sidebar becomes slide-in drawer */
   .app{position:relative;}
   .sb{
-    position:fixed;top:44px;left:0;bottom:0;z-index:200;
+    position:fixed;top:84px;left:0;bottom:0;z-index:200;
     transform:translateX(-100%);transition:transform .25s ease;
     box-shadow:4px 0 24px rgba(0,0,0,.3);
   }
   .sb.open{transform:translateX(0);}
   .sb-overlay{
-    display:none;position:fixed;inset:0;top:44px;
+    display:none;position:fixed;inset:0;top:84px;
     background:rgba(0,0,0,.45);z-index:150;
   }
   .sb-overlay.show{display:block;}
@@ -272,6 +289,18 @@ header{
     </button>
   </div>
 </header>
+
+<nav class="tool-switcher" aria-label="Switch between tools">
+  <a class="switcher-brand" href="../index.html" aria-label="FS Tools dashboard" title="FS Tools">FS</a>
+  <a class="switcher-item" href="../index.html" aria-label="Dashboard" title="Dashboard"><svg viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10h-6v-7h-4v7H3z"/></svg></a>
+  <a class="switcher-item" href="autocad_unit_converter.html" aria-label="AutoCAD Converter" title="AutoCAD Converter"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg></a>
+  <a class="switcher-item active" href="classroom-planner.html" aria-label="Classroom Planner" title="Classroom Planner" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1"/><path d="M3 10h18M10 10v10"/></svg></a>
+  <span class="switcher-item upcoming" aria-label="Room Measurer, coming soon" title="Room Measurer — coming soon"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM4 10h6v10m0-10h10"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="HEX Color, coming soon" title="HEX Color — coming soon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="Paint Estimator, coming soon" title="Paint Estimator — coming soon"><svg viewBox="0 0 24 24"><path d="M4 20h16M6 16 14 4l4 3-8 12H6z"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="Stair Calculator, coming soon" title="Stair Calculator — coming soon"><svg viewBox="0 0 24 24"><path d="M4 19h5v-5h5V9h6"/></svg></span>
+  <span class="switcher-item upcoming" aria-label="Tile Estimator, coming soon" title="Tile Estimator — coming soon"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></span>
+</nav>
 
 <div class="sb-overlay" onclick="togglePlannerSidebar()"></div>
 <div class="app">
