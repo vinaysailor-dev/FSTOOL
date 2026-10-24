@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoCAD Unit Converter — FS Tools</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-mark">FS</div>
+      <div>
+        <div class="brand-name">FS Tools</div>
+        <div class="brand-sub">Fountainhead School</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <span class="nav-label">Tools</span>
+      <a href="../index.html" class="nav-item">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        Dashboard
+      </a>
+      <a href="autocad-unit-converter.html" class="nav-item active">
+        <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        AutoCAD Converter
+      </a>
+      <a href="classroom-planner.html" class="nav-item">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        Classroom Planner
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      School Infrastructure &copy; 2026
+    </div>
+  </aside>
+
+  <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Mobile top bar -->
+  <div class="mobile-bar">
+    <div class="mobile-bar-logo">FS<span>Tools</span></div>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Open menu">
+      <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="tool-page-header">
+      <a href="../index.html">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        Dashboard
+      </a>
+    </div>
+
+    <h1 class="tool-page-title" style="margin-bottom:6px">AutoCAD Unit Converter</h1>
+    <p style="color:var(--text-2);margin-bottom:28px">Convert between mm, meter, feet and inch — optimised for AutoCAD &amp; furniture work.</p>
+
+    <div class="tool-card-panel" style="max-width:760px">
+
+      <!-- Inputs -->
+      <div class="form-row">
+        <div class="form-group">
+          <label for="feet">Feet</label>
+          <input id="feet" type="number" step="any" placeholder="e.g. 8" />
+        </div>
+        <div class="form-group">
+          <label for="inch">Inches</label>
+          <input id="inch" type="number" step="any" placeholder="e.g. 6" />
+        </div>
+        <div class="form-group">
+          <label for="mm">Millimeter</label>
+          <input id="mm" type="number" step="any" placeholder="e.g. 2438.4" />
+        </div>
+        <div class="form-group">
+          <label for="meter">Meter</label>
+          <input id="meter" type="number" step="any" placeholder="e.g. 2.438" />
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- Results -->
+      <div class="result-table">
+        <div class="result-row">
+          <span class="result-row-label">AutoCAD value in mm</span>
+          <span class="result-row-right">
+            <span class="result-row-val" id="outMm">0</span>
+            <button class="btn copy-btn" onclick="copyText('outMm')">Copy</button>
+          </span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">AutoCAD value in meter</span>
+          <span class="result-row-right">
+            <span class="result-row-val" id="outM">0</span>
+            <button class="btn copy-btn" onclick="copyText('outM')">Copy</button>
+          </span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Feet + Inch</span>
+          <span class="result-row-val" id="outFtIn">0'-0"</span>
+        </div>
+        <div class="result-row" style="border-bottom:none">
+          <span class="result-row-label">Decimal feet</span>
+          <span class="result-row-val" id="outFt">0</span>
+        </div>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- Quick buttons -->
+      <p style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Quick Presets</p>
+      <div class="quick-grid">
+        <button class="btn btn-ghost quick-btn" onclick="quickFeet(8)">8 ft → mm</button>
+        <button class="btn btn-ghost quick-btn" onclick="quickFeet(10)">10 ft → mm</button>
+        <button class="btn btn-ghost quick-btn" onclick="quickMm(600)">600 mm → ft/in</button>
+        <button class="btn btn-ghost quick-btn" onclick="quickMm(2400)">2400 mm → ft/in</button>
+        <button class="btn btn-ghost quick-btn" onclick="clearAll()">Clear All</button>
+      </div>
+
+      <p style="font-size:12px;color:var(--text-2);margin-top:18px;line-height:1.6">
+        <strong>Tip:</strong> If your AutoCAD file is in <strong>mm</strong>, copy the mm value. If the file is in <strong>meter</strong>, copy the meter value.<br>
+        Formula: 1 ft = 304.8 mm &nbsp;|&nbsp; 1 inch = 25.4 mm &nbsp;|&nbsp; 1 meter = 1000 mm.
+      </p>
+    </div>
+  </main>
+
+  <script src="../js/main.js"></script>
+  <script>
+    const feetEl  = document.getElementById('feet');
+    const inchEl  = document.getElementById('inch');
+    const mmEl    = document.getElementById('mm');
+    const meterEl = document.getElementById('meter');
+
+    function round(n, d = 3) {
+      if (!isFinite(n)) return 0;
+      return Number(n.toFixed(d));
+    }
+
+    function setOutputs(totalMm) {
+      document.getElementById('outMm').textContent  = round(totalMm, 3);
+      document.getElementById('outM').textContent   = round(totalMm / 1000, 4);
+      const totalInch = totalMm / 25.4;
+      const f = Math.floor(totalInch / 12);
+      const i = round(totalInch % 12, 3);
+      document.getElementById('outFtIn').textContent = `${f}'-${i}"`;
+      document.getElementById('outFt').textContent   = round(totalMm / 304.8, 4);
+    }
+
+    function updateFromFtIn() {
+      const f = parseFloat(feetEl.value)  || 0;
+      const i = parseFloat(inchEl.value)  || 0;
+      const totalMm = (f * 304.8) + (i * 25.4);
+      setOutputs(totalMm);
+      mmEl.value    = totalMm ? round(totalMm, 3)        : '';
+      meterEl.value = totalMm ? round(totalMm / 1000, 4) : '';
+    }
+
+    function updateFromMm() {
+      const totalMm = parseFloat(mmEl.value) || 0;
+      setOutputs(totalMm);
+      meterEl.value = totalMm ? round(totalMm / 1000, 4) : '';
+      const totalInch = totalMm / 25.4;
+      feetEl.value  = totalMm ? Math.floor(totalInch / 12)  : '';
+      inchEl.value  = totalMm ? round(totalInch % 12, 3)    : '';
+    }
+
+    function updateFromMeter() {
+      const totalMm = (parseFloat(meterEl.value) || 0) * 1000;
+      setOutputs(totalMm);
+      mmEl.value    = totalMm ? round(totalMm, 3) : '';
+      const totalInch = totalMm / 25.4;
+      feetEl.value  = totalMm ? Math.floor(totalInch / 12) : '';
+      inchEl.value  = totalMm ? round(totalInch % 12, 3)   : '';
+    }
+
+    feetEl.addEventListener('input',  updateFromFtIn);
+    inchEl.addEventListener('input',  updateFromFtIn);
+    mmEl.addEventListener('input',    updateFromMm);
+    meterEl.addEventListener('input', updateFromMeter);
+
+    function copyText(id) {
+      navigator.clipboard.writeText(document.getElementById(id).textContent);
+    }
+
+    function quickFeet(f) { feetEl.value = f; inchEl.value = 0; updateFromFtIn(); }
+    function quickMm(v)   { mmEl.value = v; updateFromMm(); }
+    function clearAll()   {
+      [feetEl, inchEl, mmEl, meterEl].forEach(el => el.value = '');
+      setOutputs(0);
+    }
+  </script>
+
+  <style>
+    .result-table {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .result-row-label { font-size: 13.5px; color: var(--text-2); }
+    .result-row-right { display: flex; align-items: center; gap: 8px; }
+    .result-row-val   { font-weight: 700; font-size: 15px; color: var(--text); }
+    .copy-btn { padding: 5px 12px; font-size: 12px; }
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 8px;
+    }
+    .quick-btn { font-size: 12.5px; padding: 8px 10px; }
+  </style>
+</body>
+</html>
