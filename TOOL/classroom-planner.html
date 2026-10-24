@@ -200,6 +200,7 @@ header{
   display:flex;align-items:center;gap:5px;
 }
 .tbtn:hover{background:var(--surface2);color:var(--t1);}
+.tbtn:disabled{opacity:.4;cursor:not-allowed;}
 .tbtn.on{background:var(--accent-dim);color:var(--accent-t);border-color:transparent;}
 .tbsep{width:1px;height:18px;background:var(--border);margin:0 3px;}
 .hint{margin-left:auto;font-size:11px;color:var(--t3);font-style:italic;}
@@ -410,13 +411,15 @@ header{
         Measure
       </button>
       <div class="tbsep"></div>
+      <button class="tbtn" id="tCopy" onclick="copySel()" title="Copy selected furniture (Ctrl+C)" disabled>▢ Copy</button>
+      <button class="tbtn" id="tPaste" onclick="pasteItems()" title="Paste copied furniture (Ctrl+V)" disabled>▣ Paste</button>
       <button class="tbtn" onclick="rotateSel()">↻ Rotate <span style="opacity:.55;font-size:10px">(R)</span></button>
       <button class="tbtn" onclick="deleteSel()">✕ Delete <span style="opacity:.55;font-size:10px">(Del)</span></button>
       <button class="tbtn" id="tClearM" onclick="clearMeasures()" style="display:none">Clear Measures</button>
       <span class="hint" id="hintTxt">Click a furniture item on the left to add it to the room</span>
     </div>
     <div class="rw" id="rw">
-      <canvas id="cv"></canvas>
+      <canvas id="cv" tabindex="0" aria-label="Room layout canvas. Select furniture, then press Ctrl+C to copy or Ctrl+V to paste."></canvas>
       <div class="selbar" id="selbar">
         <span class="sbn" id="sbName">—</span>
         <span class="sbd" id="sbDim">—</span>
@@ -593,7 +596,7 @@ function render(){
   const den=Math.round(1/sc);
   document.getElementById('scaleV').textContent=`1 : ${den}`;
   document.getElementById('hscale').textContent=`1:${den}`;
-  updateStats();updateSelBar();
+  updateStats();updateSelBar();updateClipboardControls();
 }
 
 function drawItem(i,sc,ox,oy,T){
@@ -632,6 +635,33 @@ function updateSelBar(){
   document.getElementById('sbName').textContent=c.label;
   document.getElementById('sbDim').textContent=`${w} × ${h} mm`;
   bar.classList.add('show');
+}
+
+function updateClipboardControls(){
+  document.getElementById('tCopy').disabled=S.selIds.size===0;
+  document.getElementById('tPaste').disabled=S.clipboard.length===0;
+}
+
+function copySel(){
+  if(!S.selIds.size) return;
+  S.clipboard=S.items.filter(it=>S.selIds.has(it.id)).map(it=>({catId:it.catId,x:it.x,y:it.y,rot:it.rot}));
+  updateClipboardControls();
+}
+
+function pasteItems(){
+  if(!S.clipboard.length) return;
+  const off=150;
+  S.selIds.clear();
+  for(const f of S.clipboard){
+    const c=ALL[f.catId],w=f.rot?c.h:c.w,h=f.rot?c.w:c.h;
+    const nx=Math.max(0,Math.min(S.roomW-w,f.x+off));
+    const ny=Math.max(0,Math.min(S.roomH-h,f.y+off));
+    const id=S.nid++;
+    S.items.push({id,catId:f.catId,x:nx,y:ny,rot:f.rot});
+    S.selIds.add(id);
+  }
+  S.clipboard=S.items.filter(it=>S.selIds.has(it.id)).map(it=>({catId:it.catId,x:it.x,y:it.y,rot:it.rot}));
+  render();
 }
 
 // ── PALETTE ────────────────────────────────────────────────────────────────
@@ -680,6 +710,7 @@ function addItem(catId){
 let md={down:false};
 
 function pointerDown(cx,cy,shift){
+  cv.focus({preventScroll:true});
   const{x:rx,y:ry}=c2r(cx,cy);md.down=true;
   if(S.tool==='measure'){
     const pt=snapPoint(rx,ry);
@@ -751,15 +782,16 @@ cv.addEventListener('touchend',e=>{e.preventDefault();pointerUp();},{passive:fal
 cv.addEventListener('touchcancel',e=>{md.down=false;S.drag=null;S.boxSel=null;render();},{passive:false});
 
 document.addEventListener('keydown',e=>{
-  if(e.target.tagName==='INPUT') return;
+  if(e.target.isContentEditable||['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  const key=e.key.toLowerCase();
   if(e.key==='Escape'){if(S.mStart){S.mStart=null;S.mHover=null;render();}if(S.tool==='measure'){setTool('sel');}S.selIds.clear();S.sel=null;S.boxSel=null;render();return;}
-  if((e.ctrlKey||e.metaKey)&&e.key==='a'){e.preventDefault();S.selIds.clear();for(const it of S.items) S.selIds.add(it.id);render();return;}
-  if((e.ctrlKey||e.metaKey)&&e.key==='c'){e.preventDefault();if(!S.selIds.size) return;S.clipboard=S.items.filter(it=>S.selIds.has(it.id)).map(it=>({catId:it.catId,x:it.x,y:it.y,rot:it.rot}));return;}
-  if((e.ctrlKey||e.metaKey)&&e.key==='v'){e.preventDefault();if(!S.clipboard.length) return;const off=150;S.selIds.clear();for(const f of S.clipboard){const c=ALL[f.catId];const w=f.rot?c.h:c.w,h=f.rot?c.w:c.h;const nx=Math.min(S.roomW-w,f.x+off);const ny=Math.min(S.roomH-h,f.y+off);const id=S.nid++;S.items.push({id,catId:f.catId,x:nx,y:ny,rot:f.rot});S.selIds.add(id);}S.clipboard=S.items.filter(it=>S.selIds.has(it.id)).map(it=>({catId:it.catId,x:it.x,y:it.y,rot:it.rot}));render();return;}
+  if((e.ctrlKey||e.metaKey)&&key==='a'){e.preventDefault();S.selIds.clear();for(const it of S.items) S.selIds.add(it.id);render();return;}
+  if((e.ctrlKey||e.metaKey)&&key==='c'){e.preventDefault();copySel();return;}
+  if((e.ctrlKey||e.metaKey)&&key==='v'){e.preventDefault();pasteItems();return;}
   if((e.key==='Delete'||e.key==='Backspace')&&S.selMeasure!==null){e.preventDefault();S.measures.splice(S.selMeasure,1);S.selMeasure=null;if(!S.measures.length) document.getElementById('tClearM').style.display='none';render();return;}
   if(S.selIds.size>0){
     if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();deleteSel();}
-    if(e.key==='r'||e.key==='R') rotateSel();
+    if(key==='r') rotateSel();
     const nd=e.shiftKey?100:10;
     if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
       e.preventDefault();
