@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FSK Keyplan</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; font-family: system-ui, sans-serif; overscroll-behavior:none; }
+  #canvasWrap { position:relative; width:100vw; height:100vh; background:#ffffff; touch-action:none; }
+  canvas { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+  canvas.dragging { cursor:grabbing; }
+  #toolbar { position:absolute; top:10px; left:10px; background:rgba(248,250,253,0.96); border:1px solid #d5dce6; padding:8px 10px; border-radius:9px; font-size:12px; display:flex; gap:8px; align-items:center; z-index:10; box-shadow:0 3px 10px rgba(22,38,61,0.2), 0 1px 2px rgba(22,38,61,0.12); }
+  #toolbar button { background:linear-gradient(#fff,#edf1f6); border:1px solid #c4ccd8; border-bottom-color:#aab4c2; border-radius:6px; padding:7px 13px; font-size:13px; font-weight:600; color:#26364a; cursor:pointer; box-shadow:0 1px 2px rgba(25,40,60,0.15), inset 0 1px 0 rgba(255,255,255,0.9); transition:background .12s, box-shadow .12s, transform .12s; }
+  #toolbar button:hover:not(:disabled) { background:linear-gradient(#fff,#e4ebf4); box-shadow:0 2px 5px rgba(25,40,60,0.2), inset 0 1px 0 #fff; transform:translateY(-1px); }
+  #toolbar button:active:not(:disabled) { transform:translateY(1px); box-shadow:inset 0 1px 3px rgba(25,40,60,0.2); }
+  #toolbar button:disabled { opacity:.5; cursor:default; box-shadow:none; }
+  #toolbar button.active { background:linear-gradient(#326fc4,#2457a7); border-color:#194987; color:#fff; box-shadow:0 2px 5px rgba(36,87,167,0.32), inset 0 1px 0 rgba(255,255,255,0.22); }
+  #toolbar .tool-icon { width:16px; height:16px; margin-right:6px; vertical-align:-3px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  #measureReadout { min-width:190px; color:#222; font-variant-numeric:tabular-nums; }
+  #measureReadout:empty { display:none; }
+  canvas.measuring { cursor:crosshair; }
+  canvas.areaing { cursor:crosshair; }
+</style>
+</head>
+<body>
+<div id="canvasWrap">
+  <canvas id="c"></canvas>
+  <div id="toolbar">
+    <button id="zoomFit">Fit</button>
+    <button id="zoomIn">+</button>
+    <button id="zoomOut">−</button>
+    <button id="measureTool"><svg class="tool-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 16 16 4"/><circle cx="4" cy="16" r="2"/><circle cx="16" cy="4" r="2"/><path d="m7 13 1.5 1.5M10 10l1.5 1.5M13 7l1.5 1.5"/></svg>Distance</button>
+    <button id="areaTool"><svg class="tool-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="m3 15 2-10 10 2 2 8-14 0Z"/><circle cx="3" cy="15" r="1.5"/><circle cx="5" cy="5" r="1.5"/><circle cx="15" cy="7" r="1.5"/><circle cx="17" cy="15" r="1.5"/></svg>Area</button>
+    <button id="finishArea" disabled>Finish area</button>
+    <button id="clearMeasure">Clear</button>
+    <span id="measureReadout">Measure: off</span>
+  </div>
+</div>
+
+<script>
+const DATA = __DXF_DATA__;
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('canvasWrap');
+
+function resize() {
+  canvas.width = wrap.clientWidth * devicePixelRatio;
+  canvas.height = wrap.clientHeight * devicePixelRatio;
+  canvas.style.width = wrap.clientWidth + 'px';
+  canvas.style.height = wrap.clientHeight + 'px';
+}
+window.addEventListener('resize', () => { resize(); drawFresh(); });
+resize();
+
+const [bx0, by0, bx1, by1] = DATA.bbox;
+const bw = bx1 - bx0, bh = by1 - by0;
+
+let scale = 1, offsetX = 0, offsetY = 0;
+
+function fitView() {
+  const padding = 30;
+  const availW = wrap.clientWidth - padding*2;
+  const availH = wrap.clientHeight - padding*2;
+  scale = Math.min(availW / bw, availH / bh);
+  offsetX = padding - bx0*scale + (availW - bw*scale)/2;
+  offsetY = padding + by1*scale + (availH - bh*scale)/2;
+}
+fitView();
+
+function worldToScreen(x, y) {
+  return [offsetX + x*scale, offsetY - y*scale];
+}
+function screenToWorld(sx, sy) {
+  return [(sx - offsetX)/scale, -(sy - offsetY)/scale];
+}
+
+function boundsForEntity(e) {
+  const p=e.p;
+  if (e.t==='L') return [Math.min(p[0],p[2]),Math.min(p[1],p[3]),Math.max(p[0],p[2]),Math.max(p[1],p[3])];
+  if (e.t==='A' || e.t==='C') return [p[0]-p[2],p[1]-p[2],p[0]+p[2],p[1]+p[2]];
+  if (e.t==='X') {
+    const margin=Math.max(p[2]*2,(e.s||'').length*p[2]*0.7);
+    return [p[0]-margin,p[1]-margin,p[0]+margin,p[1]+margin];
+  }
+  let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+  for (let i=0;i<p.length;i+=2) {
+    minX=Math.min(minX,p[i]); maxX=Math.max(maxX,p[i]);
+    minY=Math.min(minY,p[i+1]); maxY=Math.max(maxY,p[i+1]);
+  }
+  return [minX,minY,maxX,maxY];
+}
+const entityBounds=DATA.entities.map(boundsForEntity);
+const SNAP_GRID_SIZE=20000, snapGrid=new Map(), broadSnapEntities=[];
+for(let i=0;i<entityBounds.length;i++){
+  const b=entityBounds[i];
+  const x0=Math.floor(b[0]/SNAP_GRID_SIZE),x1=Math.floor(b[2]/SNAP_GRID_SIZE);
+  const y0=Math.floor(b[1]/SNAP_GRID_SIZE),y1=Math.floor(b[3]/SNAP_GRID_SIZE);
+  if((x1-x0+1)*(y1-y0+1)>64){broadSnapEntities.push(i);continue;}
+  for(let gx=x0;gx<=x1;gx++)for(let gy=y0;gy<=y1;gy++){
+    const key=`${gx},${gy}`;
+    let bucket=snapGrid.get(key);
+    if(!bucket){bucket=[];snapGrid.set(key,bucket);}
+    bucket.push(i);
+  }
+}
+const frameCache=document.createElement('canvas');
+const frameCacheCtx=frameCache.getContext('2d');
+let frameCacheReady=false, cachedScale=1, cachedOffsetX=0, cachedOffsetY=0;
+let previewQueued=false, idleRedrawTimer=null;
+function draw() {
+  if (!frameCacheReady) { drawFresh(); return; }
+  if (!previewQueued) {
+    previewQueued=true;
+    requestAnimationFrame(() => { previewQueued=false; renderPreview(); });
+  }
+  clearTimeout(idleRedrawTimer);
+  idleRedrawTimer=setTimeout(drawFresh,220);
+}
+function drawFresh() {
+  clearTimeout(idleRedrawTimer);
+  idleRedrawTimer=null;
+  renderFrame();
+}
+function renderPreview() {
+  if (!frameCacheReady) return;
+  const dpr=devicePixelRatio, ratio=scale/cachedScale;
+  const tx=offsetX-ratio*cachedOffsetX, ty=offsetY-ratio*cachedOffsetY;
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,wrap.clientWidth,wrap.clientHeight);
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,wrap.clientWidth,wrap.clientHeight);
+  ctx.setTransform(dpr*ratio,0,0,dpr*ratio,dpr*tx,dpr*ty);
+  ctx.drawImage(frameCache,0,0);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawMeasurement(); drawArea();
+  ctx.restore();
+}
+function cacheRenderedFrame() {
+  frameCache.width=wrap.clientWidth;
+  frameCache.height=wrap.clientHeight;
+  frameCacheCtx.drawImage(canvas,0,0,canvas.width,canvas.height,0,0,frameCache.width,frameCache.height);
+  cachedScale=scale; cachedOffsetX=offsetX; cachedOffsetY=offsetY;
+  frameCacheReady=true;
+}
+
+function renderFrame() {
+  const dpr = devicePixelRatio;
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,wrap.clientWidth, wrap.clientHeight);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0,0,wrap.clientWidth, wrap.clientHeight);
+  ctx.lineWidth = 1;
+
+  const topLeft=screenToWorld(0,0), bottomRight=screenToWorld(wrap.clientWidth,wrap.clientHeight);
+  const minX=Math.min(topLeft[0],bottomRight[0]), maxX=Math.max(topLeft[0],bottomRight[0]);
+  const minY=Math.min(topLeft[1],bottomRight[1]), maxY=Math.max(topLeft[1],bottomRight[1]);
+  for (let entityIndex=0;entityIndex<DATA.entities.length;entityIndex++) {
+    const bounds=entityBounds[entityIndex];
+    if (bounds[2]<minX || bounds[0]>maxX || bounds[3]<minY || bounds[1]>maxY) continue;
+    const e=DATA.entities[entityIndex];
+    const p = e.p;
+    const color = e.col;
+    ctx.lineWidth = e.w ? Math.max(0.5,e.w*scale) : 1;
+    if (e.t === 'L') {
+      const [x1,y1] = worldToScreen(p[0], p[1]);
+      const [x2,y2] = worldToScreen(p[2], p[3]);
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x1,y1); ctx.lineTo(x2,y2);
+      ctx.stroke();
+    } else if (e.t === 'P') {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      for (let i=0; i<p.length; i+=2) {
+        const [sx,sy] = worldToScreen(p[i], p[i+1]);
+        if (i===0) ctx.moveTo(sx,sy); else ctx.lineTo(sx,sy);
+      }
+      if (e.c) ctx.closePath();
+      ctx.stroke();
+    } else if (e.t === 'H') {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath();
+      for (let i=0; i<p.length; i+=2) {
+        const [sx,sy] = worldToScreen(p[i], p[i+1]);
+        if (i===0) ctx.moveTo(sx,sy); else ctx.lineTo(sx,sy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (e.t === 'C') {
+      const [cx,cy] = worldToScreen(p[0], p[1]);
+      const r = p[2]*scale;
+      if (r > 0.3) {
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx,cy,r,0,Math.PI*2);
+        ctx.stroke();
+      }
+    } else if (e.t === 'A') {
+      const [cx,cy] = worldToScreen(p[0], p[1]);
+      const r = p[2]*scale;
+      if (r > 0.3) {
+        const a1 = -p[3]*Math.PI/180;
+        const a2 = -p[4]*Math.PI/180;
+        ctx.strokeStyle = color;
+        ctx.beginPath();
+        ctx.arc(cx,cy,r,a1,a2,true);
+        ctx.stroke();
+      }
+    } else if (e.t === 'X') {
+      const h = p[2]*scale;
+      if (h > 0.5) {
+        const [sx,sy] = worldToScreen(p[0], p[1]);
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(-p[3]*Math.PI/180);
+        ctx.fillStyle = color;
+        ctx.font = `${e.b ? 'bold ' : ''}${h}px Arial, sans-serif`;
+        const al = e.al || 'lb';
+        const halign = al[0] === 'l' ? 'left' : (al[0] === 'c' ? 'center' : 'right');
+        const valign = al[1] === 't' ? 'top' : (al[1] === 'm' ? 'middle' : 'bottom');
+        ctx.textAlign = halign;
+        ctx.textBaseline = valign;
+        ctx.fillText(e.s, 0, 0);
+        ctx.restore();
+      }
+    }
+  }
+  ctx.restore();
+  cacheRenderedFrame();
+  ctx.save();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  drawMeasurement(); drawArea();
+  ctx.restore();
+}
+
+// Drawing coordinates and the embedded CAD dimensions are in millimetres.
+const measurePoints = [];
+const completedDistances = [];
+let measureActive = false;
+let measureHoverPoint = null, pendingMeasureHover = null, hoverFrameQueued = false;
+const areaPoints = [];
+const completedAreas = [];
+let areaActive = false;
+let areaFinished = false;
+function polygonAreaM2(points) {
+  if (points.length < 3) return 0;
+  let twiceArea = 0;
+  for (let i=0; i<points.length; i++) {
+    const a = points[i], b = points[(i+1)%points.length];
+    twiceArea += a.x*b.y - b.x*a.y;
+  }
+  return Math.abs(twiceArea) / 2_000_000;
+}
+function drawAreaShape(points, finished, areaNumber) {
+  if (!points.length) return;
+  ctx.save();
+  const screenPoints = points.map(p => worldToScreen(p.x,p.y));
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#e05b00';
+  ctx.fillStyle = 'rgba(255,145,0,0.18)';
+  ctx.beginPath();
+  screenPoints.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y));
+  if (finished && points.length >= 3) ctx.closePath();
+  if (finished && points.length >= 3) ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#e05b00';
+  for (const [x,y] of screenPoints) {
+    ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = '#e05b00'; ctx.lineWidth = 3;
+  }
+  if (finished && points.length >= 3) {
+    const cx = screenPoints.reduce((sum,p)=>sum+p[0],0)/screenPoints.length;
+    const cy = screenPoints.reduce((sum,p)=>sum+p[1],0)/screenPoints.length;
+    const areaM2 = polygonAreaM2(points);
+    const label = `Area ${areaNumber}: ${areaM2.toFixed(2)} m² · ${(areaM2*10.7639).toFixed(2)} ft²`;
+    ctx.font = 'bold 15px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.94)';
+    ctx.fillRect(cx-w/2-7,cy-13,w+14,26);
+    ctx.fillStyle = '#b84c00'; ctx.fillText(label,cx,cy);
+  }
+  ctx.restore();
+}
+function drawArea() {
+  completedAreas.forEach((area,index)=>drawAreaShape(area,true,index+1));
+  drawAreaShape(areaPoints,areaFinished,completedAreas.length+1);
+}
+function addAreaPoint(x,y) {
+  areaPoints.push({x,y});
+  document.getElementById('finishArea').disabled = areaPoints.length < 3;
+  draw();
+}
+function finishArea() {
+  if (areaPoints.length < 3) return;
+  completedAreas.push(areaPoints.map(p=>({...p})));
+  areaPoints.length = 0; areaFinished = false; areaActive = true;
+  canvas.classList.add('areaing');
+  document.getElementById('areaTool').classList.add('active');
+  document.getElementById('finishArea').disabled = true;
+  document.getElementById('measureReadout').textContent = `Area ${completedAreas.length} saved. Click the next boundary, then Finish area.`;
+  draw();
+}
+function drawMeasurement() {
+  if (!measurePoints.length && !completedDistances.length) return;
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#f07a00';
+  ctx.fillStyle = '#f07a00';
+  function drawDistanceSegment(startPoint,endPoint) {
+    const [x1,y1] = worldToScreen(startPoint.x, startPoint.y);
+    const [x2,y2] = worldToScreen(endPoint.x, endPoint.y);
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    const dx = (endPoint.x-startPoint.x)/1000;
+    const dy = (endPoint.y-startPoint.y)/1000;
+    const distanceM = Math.hypot(dx,dy);
+    const totalInches = Math.round(distanceM*39.37007874);
+    const feet = Math.floor(totalInches/12);
+    const inches = totalInches-feet*12;
+    const label = `${distanceM.toFixed(2)} m · ${feet}′ ${inches}″`;
+    const mx = (x1+x2)/2, my = (y1+y2)/2;
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    const labelWidth = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.94)';
+    ctx.fillRect(mx-labelWidth/2-6, my-25, labelWidth+12, 21);
+    ctx.fillStyle = '#c45f00';
+    ctx.fillText(label, mx, my-7);
+  }
+  function drawDistancePoint(point) {
+    const [sx,sy] = worldToScreen(point.x, point.y);
+    if (point.snapped) {
+      ctx.beginPath(); ctx.arc(sx,sy,10,0,Math.PI*2);
+      ctx.strokeStyle = '#1674d1'; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(sx,sy,5,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = '#f07a00'; ctx.lineWidth = 4;
+  }
+  for (const measurement of completedDistances) {
+    drawDistanceSegment(measurement.start,measurement.end);
+    drawDistancePoint(measurement.start);
+    drawDistancePoint(measurement.end);
+  }
+  if (!measurePoints.length) { ctx.restore(); return; }
+  const startPoint=measurePoints[0];
+  const endPoint=measurePoints.length===2 ? measurePoints[1] : measureHoverPoint;
+  if (endPoint) drawDistanceSegment(startPoint,endPoint);
+  for (const point of measurePoints) drawDistancePoint(point);
+  if (measurePoints.length===1 && measureHoverPoint) {
+    const [sx,sy]=worldToScreen(measureHoverPoint.x,measureHoverPoint.y);
+    if (measureHoverPoint.snapped) {
+      ctx.beginPath(); ctx.arc(sx,sy,10,0,Math.PI*2);
+      ctx.strokeStyle='#1674d1'; ctx.lineWidth=2; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(sx,sy,4,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+function updateMeasureReadout() {
+  const readout = document.getElementById('measureReadout');
+  if (!measureActive) { readout.textContent = 'Distance: off'; return; }
+  if (measurePoints.length === 0) { readout.textContent = 'Click a point to read coordinates'; return; }
+  const p1 = measurePoints[0];
+  if (measurePoints.length === 1) {
+    const snapLabel = p1.snapped ? 'Snapped point' : 'Point';
+    readout.textContent = `${snapLabel}: X ${(p1.x/1000).toFixed(3)} m, Y ${(p1.y/1000).toFixed(3)} m · move pointer to preview distance`;
+    return;
+  }
+  const p2 = measurePoints[1];
+  readout.textContent = '';
+}
+
+const SNAP_TOLERANCE_PX = 14;
+function nearestOnSegment(x,y,ax,ay,bx,by) {
+  const dx=bx-ax, dy=by-ay, length2=dx*dx+dy*dy;
+  const t=length2 ? Math.max(0,Math.min(1,((x-ax)*dx+(y-ay)*dy)/length2)) : 0;
+  return {x:ax+t*dx,y:ay+t*dy};
+}
+function angleOnArc(angle,start,end) {
+  const mod=v=>((v%360)+360)%360;
+  const span=mod(end-start), offset=mod(angle-start);
+  return offset<=span+0.001;
+}
+function snapToGeometry(x,y) {
+  const tolerance=SNAP_TOLERANCE_PX/scale, tolerance2=tolerance*tolerance;
+  let best=null, bestDistance2=tolerance2;
+  const consider=(px,py)=>{
+    const dx=px-x,dy=py-y,d2=dx*dx+dy*dy;
+    if(d2<bestDistance2){bestDistance2=d2;best={x:px,y:py,snapped:true};}
+  };
+  const x0=Math.floor((x-tolerance)/SNAP_GRID_SIZE),x1=Math.floor((x+tolerance)/SNAP_GRID_SIZE);
+  const y0=Math.floor((y-tolerance)/SNAP_GRID_SIZE),y1=Math.floor((y+tolerance)/SNAP_GRID_SIZE);
+  const candidates=new Set(broadSnapEntities);
+  for(let gx=x0;gx<=x1;gx++)for(let gy=y0;gy<=y1;gy++){
+    const bucket=snapGrid.get(`${gx},${gy}`);
+    if(bucket)for(const i of bucket)candidates.add(i);
+  }
+  for(const i of candidates){
+    const b=entityBounds[i];
+    if(b[2]<x-tolerance||b[0]>x+tolerance||b[3]<y-tolerance||b[1]>y+tolerance)continue;
+    const e=DATA.entities[i],p=e.p;
+    if(e.t==='L'){
+      const q=nearestOnSegment(x,y,p[0],p[1],p[2],p[3]); consider(q.x,q.y);
+    }else if(e.t==='P'||e.t==='H'){
+      const count=p.length/2,closed=e.t==='H'||e.c;
+      for(let j=0;j<count-1+(closed?1:0);j++){
+        const a=j%count, n=(j+1)%count;
+        const q=nearestOnSegment(x,y,p[a*2],p[a*2+1],p[n*2],p[n*2+1]);
+        consider(q.x,q.y);
+      }
+    }else if(e.t==='C'||e.t==='A'){
+      const dx=x-p[0],dy=y-p[1],angle=Math.atan2(dy,dx)*180/Math.PI;
+      if(e.t==='C'||angleOnArc(angle,p[3],p[4])){
+        const length=Math.hypot(dx,dy);
+        if(length>0) consider(p[0]+dx/length*p[2],p[1]+dy/length*p[2]);
+      }
+      if(e.t==='A'){
+        for(const a of [p[3],p[4]]){
+          const rad=a*Math.PI/180; consider(p[0]+Math.cos(rad)*p[2],p[1]+Math.sin(rad)*p[2]);
+        }
+      }
+    }
+  }
+  return best||{x,y,snapped:false};
+}
+function queueDistancePreview(clientX,clientY) {
+  const rect=canvas.getBoundingClientRect();
+  if(clientX<rect.left||clientX>rect.right||clientY<rect.top||clientY>rect.bottom){
+    pendingMeasureHover=null;
+    if(measureHoverPoint){measureHoverPoint=null;draw();}
+    return;
+  }
+  pendingMeasureHover={x:clientX-rect.left,y:clientY-rect.top};
+  if(hoverFrameQueued)return;
+  hoverFrameQueued=true;
+  requestAnimationFrame(()=>{
+    hoverFrameQueued=false;
+    if(!measureActive||measurePoints.length!==1||!pendingMeasureHover)return;
+    const [x,y]=screenToWorld(pendingMeasureHover.x,pendingMeasureHover.y);
+    measureHoverPoint=snapToGeometry(x,y);
+    draw();
+  });
+}
+document.getElementById('measureTool').onclick = () => {
+  measureActive = !measureActive;
+  measureHoverPoint=null;
+  areaActive = false;
+  canvas.classList.remove('areaing');
+  document.getElementById('areaTool').classList.remove('active');
+  canvas.classList.toggle('measuring', measureActive);
+  document.getElementById('measureTool').classList.toggle('active', measureActive);
+  updateMeasureReadout();
+};
+document.getElementById('areaTool').onclick = () => {
+  if (!areaActive) {
+    areaActive = true; measureActive = false; measureHoverPoint=null;
+    canvas.classList.add('areaing'); canvas.classList.remove('measuring');
+    document.getElementById('measureTool').classList.remove('active');
+    document.getElementById('areaTool').classList.add('active');
+    document.getElementById('measureReadout').textContent = 'Click boundary points, then Finish area';
+  } else if (areaPoints.length >= 3) finishArea();
+  else {
+    areaActive = false;
+    canvas.classList.remove('areaing');
+    document.getElementById('areaTool').classList.remove('active');
+    document.getElementById('finishArea').disabled = true;
+    document.getElementById('measureReadout').textContent = '';
+  }
+  draw();
+};
+document.getElementById('finishArea').onclick = finishArea;
+document.getElementById('clearMeasure').onclick = () => {
+  measurePoints.length = 0;
+  completedDistances.length = 0;
+  measureHoverPoint=null;
+  areaPoints.length = 0; areaFinished = false;
+  completedAreas.length = 0;
+  document.getElementById('finishArea').disabled = true;
+  updateMeasureReadout(); draw();
+};
+
+let isDragging = false, lastX=0, lastY=0;
+canvas.addEventListener('mousedown', (ev) => {
+  if (measureActive) {
+    const rect = canvas.getBoundingClientRect();
+    const [rawX,rawY] = screenToWorld(ev.clientX-rect.left, ev.clientY-rect.top);
+    const point = snapToGeometry(rawX,rawY);
+    if (measurePoints.length >= 2) {
+      completedDistances.push({start:measurePoints[0],end:measurePoints[1]});
+      measurePoints.length = 0;
+    }
+    measurePoints.push(point);
+    measureHoverPoint=null;
+    updateMeasureReadout(); draw();
+    return;
+  }
+  if (areaActive) {
+    const rect = canvas.getBoundingClientRect();
+    const [x,y] = screenToWorld(ev.clientX-rect.left, ev.clientY-rect.top);
+    addAreaPoint(x,y);
+    return;
+  }
+  isDragging = true; lastX = ev.clientX; lastY = ev.clientY;
+  canvas.classList.add('dragging');
+});
+window.addEventListener('mouseup', () => { isDragging=false; canvas.classList.remove('dragging'); });
+window.addEventListener('mousemove', (ev) => {
+  if (measureActive && measurePoints.length===1) { queueDistancePreview(ev.clientX,ev.clientY); return; }
+  if (!isDragging) return;
+  const dx = ev.clientX - lastX, dy = ev.clientY - lastY;
+  offsetX += dx; offsetY += dy;
+  lastX = ev.clientX; lastY = ev.clientY;
+  draw();
+});
+canvas.addEventListener('wheel', (ev) => {
+  ev.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+  const [wx, wy] = screenToWorld(mx, my);
+  const factor = ev.deltaY < 0 ? 1.15 : 1/1.15;
+  scale *= factor;
+  const [nsx, nsy] = worldToScreen(wx, wy);
+  offsetX += mx - nsx;
+  offsetY += my - nsy;
+  draw();
+}, {passive:false});
+
+document.getElementById('zoomFit').onclick = () => { fitView(); draw(); };
+document.getElementById('zoomIn').onclick = () => {
+  scale *= 1.3;
+  offsetX = wrap.clientWidth/2 - (wrap.clientWidth/2-offsetX)*1.3;
+  offsetY = wrap.clientHeight/2 - (wrap.clientHeight/2-offsetY)*1.3;
+  draw();
+};
+document.getElementById('zoomOut').onclick = () => {
+  scale /= 1.3;
+  offsetX = wrap.clientWidth/2 - (wrap.clientWidth/2-offsetX)/1.3;
+  offsetY = wrap.clientHeight/2 - (wrap.clientHeight/2-offsetY)/1.3;
+  draw();
+};
+
+// ---- Touch support: one-finger pan, two-finger pinch-zoom ----
+let touchMode = null; // 'pan' | 'pinch'
+let lastTouchX = 0, lastTouchY = 0;
+let lastPinchDist = 0, lastPinchMidX = 0, lastPinchMidY = 0;
+
+function touchDist(t0, t1) {
+  const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+function touchMid(t0, t1, rect) {
+  return [
+    ((t0.clientX + t1.clientX)/2) - rect.left,
+    ((t0.clientY + t1.clientY)/2) - rect.top
+  ];
+}
+
+canvas.addEventListener('touchstart', (ev) => {
+  ev.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  if (measureActive && ev.touches.length === 1) {
+    const touch = ev.touches[0];
+    const [rawX,rawY] = screenToWorld(touch.clientX-rect.left, touch.clientY-rect.top);
+    const point = snapToGeometry(rawX,rawY);
+    if (measurePoints.length >= 2) {
+      completedDistances.push({start:measurePoints[0],end:measurePoints[1]});
+      measurePoints.length = 0;
+    }
+    measurePoints.push(point);
+    measureHoverPoint=null;
+    updateMeasureReadout(); draw();
+    touchMode = null;
+    return;
+  }
+  if (areaActive && ev.touches.length === 1) {
+    const touch = ev.touches[0];
+    const [x,y] = screenToWorld(touch.clientX-rect.left, touch.clientY-rect.top);
+    addAreaPoint(x,y);
+    touchMode = null;
+    return;
+  }
+  if (ev.touches.length === 1) {
+    touchMode = 'pan';
+    lastTouchX = ev.touches[0].clientX;
+    lastTouchY = ev.touches[0].clientY;
+  } else if (ev.touches.length === 2) {
+    touchMode = 'pinch';
+    lastPinchDist = touchDist(ev.touches[0], ev.touches[1]);
+    [lastPinchMidX, lastPinchMidY] = touchMid(ev.touches[0], ev.touches[1], rect);
+  }
+}, {passive:false});
+
+canvas.addEventListener('touchmove', (ev) => {
+  ev.preventDefault();
+  if (measureActive && measurePoints.length===1 && ev.touches.length===1) {
+    queueDistancePreview(ev.touches[0].clientX,ev.touches[0].clientY); return;
+  }
+  if (measureActive) return;
+  const rect = canvas.getBoundingClientRect();
+  if (touchMode === 'pan' && ev.touches.length === 1) {
+    const dx = ev.touches[0].clientX - lastTouchX;
+    const dy = ev.touches[0].clientY - lastTouchY;
+    offsetX += dx; offsetY += dy;
+    lastTouchX = ev.touches[0].clientX;
+    lastTouchY = ev.touches[0].clientY;
+    draw();
+  } else if (touchMode === 'pinch' && ev.touches.length === 2) {
+    const dist = touchDist(ev.touches[0], ev.touches[1]);
+    const [midX, midY] = touchMid(ev.touches[0], ev.touches[1], rect);
+    if (lastPinchDist > 0) {
+      const [wx, wy] = screenToWorld(midX, midY);
+      const factor = dist / lastPinchDist;
+      scale *= factor;
+      const [nsx, nsy] = worldToScreen(wx, wy);
+      offsetX += midX - nsx;
+      offsetY += midY - nsy;
+      // also account for finger midpoint drifting while pinching
+      offsetX += midX - lastPinchMidX;
+      offsetY += midY - lastPinchMidY;
+      draw();
+    }
+    lastPinchDist = dist;
+    lastPinchMidX = midX; lastPinchMidY = midY;
+  }
+}, {passive:false});
+
+canvas.addEventListener('touchend', (ev) => {
+  ev.preventDefault();
+  if (ev.touches.length === 0) {
+    touchMode = null;
+  } else if (ev.touches.length === 1) {
+    touchMode = 'pan';
+    lastTouchX = ev.touches[0].clientX;
+    lastTouchY = ev.touches[0].clientY;
+  }
+}, {passive:false});
+
+draw();
+</script>
+</body>
+</html>
+
+

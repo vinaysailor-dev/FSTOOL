@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101820">
+  <title>Draft — DXF Canvas Viewer</title>
+  <link id="viewer-style-link" rel="stylesheet" href="style.css">
+  <script id="dxf-parser" src="dxf-parser/commonjs/index.js"></script>
+  <script id="viewer-app" defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Draft home"><span class="brand-mark">D</span><span>DRAFT<span class="brand-sub"> / DXF STUDIO</span></span></a>
+    <div class="file-title"><span class="live-dot"></span><span id="fileName">No drawing loaded</span></div>
+    <div class="top-actions"><button id="openFileBtn" class="button subtle">Open DXF</button><button id="fitBtn" class="button subtle" disabled>Fit drawing <kbd>F</kbd></button><button id="exportBtn" class="button subtle" disabled>Export data <span>↗</span></button><button id="exportHtmlBtn" class="button primary" disabled>Export HTML <span>↗</span></button></div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <div class="sidebar-head"><div><p class="eyebrow">WORKSPACE</p><h1>Drawing</h1></div><span class="side-icon">⌘</span></div>
+      <section class="upload-card" id="dropZone" tabindex="0" aria-label="Drop a DXF file or choose one">
+        <input id="fileInput" type="file" accept=".dxf,application/dxf" hidden>
+        <div class="upload-icon"><span>↑</span></div>
+        <strong>Drop a DXF file here</strong>
+        <span class="muted">or <button id="chooseBtn" class="text-button">choose a file</button></span>
+        <span class="file-hint">DXF format · Local file only</span>
+      </section>
+      <section class="panel-section">
+        <div class="section-title"><span>DOCUMENT</span><span class="tiny">01</span></div>
+        <div class="document-row"><span class="doc-icon">▧</span><div class="doc-copy"><strong id="docTitle">Untitled drawing</strong><small id="docMeta">Waiting for a file</small></div><span class="status-pill" id="statusPill">EMPTY</span></div>
+      </section>
+      <section class="panel-section stats-section">
+        <div class="section-title"><span>ENTITY BREAKDOWN</span><span class="tiny" id="entityTotal">—</span></div>
+        <div id="entityBreakdown" class="breakdown empty-note">Load a drawing to inspect entities.</div>
+      </section>
+      <section class="panel-section layer-section">
+        <div class="section-title"><span>LAYERS</span><button id="toggleLayers" class="tiny icon-button" title="Toggle all layers">◉</button></div>
+        <div id="layerList" class="layer-list"><div class="empty-note">Layers will appear here.</div></div>
+      </section>
+      <div class="sidebar-foot"><span class="foot-mark">◌</span><span>Processing stays in your browser</span></div>
+    </aside>
+
+    <section class="canvas-area">
+      <div class="canvas-top"><div><span class="eyebrow">MODEL SPACE</span><span class="canvas-sub"> / 2D VIEWPORT</span></div><div class="view-tools"><button id="zoomOut" class="tool-button" title="Zoom out">−</button><span id="zoomReadout">100%</span><button id="zoomIn" class="tool-button" title="Zoom in">+</button><i></i><button id="gridToggle" class="tool-button selected" title="Toggle grid">▦</button><button id="themeToggle" class="tool-button" title="Toggle canvas theme">◐</button></div></div>
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="drawingCanvas" aria-label="DXF drawing canvas"></canvas>
+        <div class="empty-state" id="emptyState"><div class="empty-art"><span class="art-cross">+</span><span class="art-circle"></span><span class="art-line"></span><span class="art-box"></span></div><p class="eyebrow">YOUR CANVAS IS READY</p><h2>Bring your drawing to life.</h2><p>Import a DXF file to inspect geometry, layers, and entity data in an interactive canvas.</p><button class="button primary" id="emptyChoose">Choose a DXF file <span>↗</span></button><div class="format-note"><span>◎</span> DXF · LOCAL PROCESSING</div></div>
+        <div class="canvas-hud"><span><b class="hud-dot"></b><span id="hudState">AWAITING FILE</span></span><span id="coordReadout">X 0.00&nbsp;&nbsp; Y 0.00</span></div>
+        <div id="toast" class="toast" role="status"></div>
+      </div>
+      <footer class="canvas-footer"><span><b>SCROLL</b> to zoom <span class="sep">·</span> <b>DRAG</b> to pan</span><span id="boundsReadout">—</span></footer>
+    </section>
+
+    <aside class="inspector"><div class="inspector-head"><div><p class="eyebrow">INSPECTOR</p><h2>DXF data</h2></div><span class="inspect-glyph">⌕</span></div>
+      <div class="inspector-empty" id="inspectorEmpty"><div class="inspect-orbit">◎</div><strong>Nothing selected</strong><span>Load a drawing to explore its parsed data.</span></div>
+      <div id="inspectorContent" class="inspector-content hidden"><div class="data-card"><div class="data-label">DRAWING SUMMARY</div><div id="summaryRows"></div></div><div class="data-card"><div class="data-label">LAYERS</div><div id="layerSummary"></div></div><div class="data-card"><div class="data-label">HEADER</div><div id="headerSummary" class="code-preview"></div></div><button id="viewJsonBtn" class="button outline full">View complete parsed DXF <span>↗</span></button></div>
+      <div class="inspector-foot"><span class="privacy-lock">▣</span> Your file never leaves this device</div>
+    </aside>
+  </main>
+  <dialog id="jsonDialog"><div class="dialog-head"><div><p class="eyebrow">RAW PARSED OBJECT</p><h2>DXF data</h2></div><button id="closeDialog" class="tool-button" aria-label="Close">×</button></div><pre id="jsonOutput"></pre></dialog>
+</body>
+</html>
