@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173b76">
+  <title>SVG Canvas Viewer</title>
+  <style>
+    :root { color-scheme: light; --blue: #173b76; --red: #a32b2b; --ink: #172d29; --muted: #68788b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; min-height: 420px; display: flex; flex-direction: column; overflow: hidden; color: var(--ink); background: #edf1f6; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    header { position: relative; z-index: 2; min-height: 72px; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 18px; color: #fff; background: var(--blue); box-shadow: 0 4px 18px #102c5730; }
+    .brand { min-width: 160px; }
+    .brand strong { display: block; font-size: 15px; letter-spacing: -.02em; }
+    .brand span { display: block; margin-top: 3px; color: #d2deef; font-size: 11px; }
+    .toolbar { display: flex; justify-content: flex-end; align-items: center; gap: 7px; flex-wrap: wrap; }
+    button { height: 38px; padding: 0 12px; border: 0; border-radius: 9px; color: var(--blue); background: #fff; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; transition: background .15s ease, color .15s ease, opacity .15s ease; }
+    button:hover:not(:disabled) { color: var(--red); background: #fbe2e0; }
+    button:focus-visible { outline: 3px solid #ff9b8e; outline-offset: 2px; }
+    button:disabled { opacity: .45; cursor: default; }
+    .open-button { color: #fff; background: #c83b3b; }
+    .open-button:hover:not(:disabled) { color: #fff; background: #a52c2c; }
+    .zoom-controls { display: flex; align-items: center; gap: 5px; padding: 3px 5px; border-radius: 11px; background: #0d2d63; }
+    .zoom-controls button { width: 38px; padding: 0; font-size: 18px; }
+    #zoom-label { min-width: 52px; color: #fff; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; }
+    #file-name { max-width: 210px; overflow: hidden; color: #d2deef; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+    #file-picker { display: none; }
+    #canvas { position: relative; flex: 1; min-height: 0; overflow: hidden; display: grid; place-items: center; background-color: #e8edf3; background-image: radial-gradient(#cbd4df 1px, transparent 1px); background-size: 20px 20px; touch-action: none; cursor: grab; }
+    #canvas.dragging { cursor: grabbing; }
+    #canvas.drag-over { outline: 4px solid #c83b3b; outline-offset: -8px; }
+    #drawing { position: absolute; left: 0; top: 0; display: none; max-width: none; max-height: none; user-select: none; -webkit-user-drag: none; transform: translate3d(0px, 0px, 0) scale(1); transform-origin: top left; }
+    .welcome { width: min(470px, calc(100% - 38px)); padding: 36px 30px; text-align: center; border: 1px solid #d8e0ea; border-radius: 22px; background: #ffffffed; box-shadow: 0 18px 55px #173b7612; pointer-events: none; }
+    .upload-icon { display: grid; place-items: center; width: 54px; height: 54px; margin: 0 auto 17px; border-radius: 17px; color: var(--blue); background: #eaf0f9; font-size: 26px; font-weight: 700; }
+    .welcome h1 { margin: 0 0 9px; color: var(--ink); font-size: 22px; letter-spacing: -.04em; }
+    .welcome p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    #message { position: absolute; top: 16px; left: 50%; z-index: 1; display: none; max-width: calc(100% - 32px); transform: translateX(-50%); padding: 10px 15px; border: 1px solid #f0c7c3; border-radius: 10px; color: #802222; background: #fff6f5; font-size: 12px; box-shadow: 0 4px 18px #173b7610; }
+    .hint { position: absolute; left: 14px; bottom: 14px; padding: 8px 11px; border: 1px solid #dce3eb; border-radius: 9px; background: #ffffffed; color: #596879; font-size: 11px; pointer-events: none; box-shadow: 0 3px 12px #173b7610; }
+    .hint kbd { padding: 1px 4px; border-radius: 4px; background: #edf1f6; font: inherit; font-weight: 800; }
+    @media (max-width: 760px) {
+      header { align-items: flex-start; flex-direction: column; padding: 12px; gap: 10px; }
+      .brand { display: flex; align-items: baseline; gap: 8px; }
+      .brand span { margin: 0; }
+      .toolbar { width: 100%; justify-content: flex-start; }
+      #file-name { flex: 1; max-width: none; min-width: 80px; }
+      button { height: 36px; padding: 0 10px; }
+      .zoom-controls { gap: 3px; }
+      .welcome { padding: 28px 20px; }
+    }
+    @media (max-width: 450px) {
+      #file-name { order: 5; flex-basis: 100%; }
+      .hint { font-size: 10px; }
+      .hint kbd { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><strong>SVG Canvas Viewer</strong><span>Open, zoom, and pan SVG drawings</span></div>
+    <div class="toolbar" aria-label="Viewer controls">
+      <button class="open-button" id="open-button" type="button">Open SVG</button>
+      <button id="export-button" type="button" disabled>Export to HTML</button>
+      <input id="file-picker" type="file" accept=".svg,image/svg+xml">
+      <div class="zoom-controls" aria-label="Zoom controls">
+        <button id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out" disabled>−</button>
+        <span id="zoom-label" aria-live="polite">Fit</span>
+        <button id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in" disabled>+</button>
+      </div>
+      <button id="fit-button" type="button" disabled>Fit</button>
+      <button id="reset-button" type="button" disabled>Reset</button>
+      <button id="fullscreen-button" type="button" title="Toggle full screen">Full screen</button>
+      <span id="file-name">No file open</span>
+    </div>
+  </header>
+  <main id="canvas" aria-label="SVG viewing canvas">
+    <img id="drawing" alt="Uploaded SVG drawing">
+    <div class="welcome" id="welcome">
+      <div class="upload-icon" aria-hidden="true">↥</div>
+      <h1>Open an SVG drawing</h1>
+      <p>Choose an SVG file or drop it anywhere on this canvas. Then scroll to zoom and drag to pan.</p>
+    </div>
+    <div id="message" role="status"></div>
+    <div class="hint">Scroll to zoom · Drag to pan · <kbd>+</kbd>/<kbd>−</kbd> zoom · <kbd>0</kbd> fit</div>
+  </main>
+  <script>
+    const canvas = document.getElementById("canvas");
+    const drawing = document.getElementById("drawing");
+    const picker = document.getElementById("file-picker");
+    const welcome = document.getElementById("welcome");
+    const message = document.getElementById("message");
+    const label = document.getElementById("zoom-label");
+    const fileName = document.getElementById("file-name");
+    const controls = ["zoom-out", "zoom-in", "fit-button", "reset-button"];
+    let objectUrl = null;
+    let currentSvgData = null;
+    let currentFileName = "drawing.svg";
+    let sourceWidth = 1;
+    let sourceHeight = 1;
+    let baseLeft = 0;
+    let baseTop = 0;
+    let baseWidth = 1;
+    let baseHeight = 1;
+    let scale = 1;
+    let x = 0;
+    let y = 0;
+    let drag = null;
+    const minScale = 0.25;
+    const maxScale = 16;
+
+    function report(text) {
+      message.textContent = text;
+      message.style.display = text ? "block" : "none";
+    }
+    function render() {
+      drawing.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+      label.textContent = `${Math.round(scale * 100)}%`;
+    }
+    function fitDrawing() {
+      if (!drawing.src || !sourceWidth || !sourceHeight) return;
+      const bounds = canvas.getBoundingClientRect();
+      const fitScale = Math.min(bounds.width / sourceWidth, bounds.height / sourceHeight) * 0.94;
+      baseWidth = sourceWidth * fitScale;
+      baseHeight = sourceHeight * fitScale;
+      baseLeft = (bounds.width - baseWidth) / 2;
+      baseTop = (bounds.height - baseHeight) / 2;
+      drawing.style.width = `${baseWidth}px`;
+      drawing.style.height = `${baseHeight}px`;
+      drawing.style.left = `${baseLeft}px`;
+      drawing.style.top = `${baseTop}px`;
+      scale = 1;
+      x = 0;
+      y = 0;
+      render();
+    }
+    function zoomAt(nextScale, clientX, clientY) {
+      if (!drawing.src) return;
+      nextScale = Math.max(minScale, Math.min(maxScale, nextScale));
+      const bounds = canvas.getBoundingClientRect();
+      const pointX = (clientX ?? (bounds.left + bounds.width / 2)) - bounds.left;
+      const pointY = (clientY ?? (bounds.top + bounds.height / 2)) - bounds.top;
+      const ratio = nextScale / scale;
+      x = pointX - baseLeft - (pointX - baseLeft - x) * ratio;
+      y = pointY - baseTop - (pointY - baseTop - y) * ratio;
+      scale = nextScale;
+      render();
+    }
+    function parseSvgSize(text) {
+      const xml = new DOMParser().parseFromString(text, "image/svg+xml");
+      if (xml.querySelector("parsererror") || xml.documentElement.localName.toLowerCase() !== "svg") {
+        throw new Error("That file does not contain a valid SVG drawing.");
+      }
+      const root = xml.documentElement;
+      const viewBox = (root.getAttribute("viewBox") || root.getAttribute("viewbox") || "").trim().split(/[\s,]+/).map(Number);
+      if (viewBox.length === 4 && viewBox.every(Number.isFinite) && viewBox[2] > 0 && viewBox[3] > 0) {
+        return [viewBox[2], viewBox[3]];
+      }
+      const length = value => {
+        const match = String(value || "").trim().match(/^([\d.]+)(?:px)?$/i);
+        return match ? Number(match[1]) : 0;
+      };
+      const width = length(root.getAttribute("width"));
+      const height = length(root.getAttribute("height"));
+      if (width > 0 && height > 0) return [width, height];
+      return [0, 0];
+    }
+    async function openFile(file) {
+      if (!file) return;
+      if (!/\.svg$/i.test(file.name) && file.type !== "image/svg+xml") {
+        report("Please choose an SVG file.");
+        return;
+      }
+      try {
+        const text = await file.text();
+        const [width, height] = parseSvgSize(text);
+        const dataUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(new Error("Could not read the SVG file."));
+          reader.readAsDataURL(file);
+        });
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(file);
+        currentSvgData = dataUrl;
+        currentFileName = file.name;
+        sourceWidth = width;
+        sourceHeight = height;
+        drawing.onload = () => {
+          if (!sourceWidth || !sourceHeight) {
+            sourceWidth = drawing.naturalWidth || 300;
+            sourceHeight = drawing.naturalHeight || 150;
+          }
+          drawing.style.display = "block";
+          welcome.style.display = "none";
+          controls.forEach(id => document.getElementById(id).disabled = false);
+          document.getElementById("zoom-out").disabled = false;
+          document.getElementById("zoom-in").disabled = false;
+          document.getElementById("export-button").disabled = false;
+          fileName.textContent = file.name;
+          fileName.title = file.name;
+          report("");
+          fitDrawing();
+        };
+        drawing.onerror = () => report("This SVG could not be displayed. Check that the file is a valid SVG.");
+        drawing.src = objectUrl;
+      } catch (error) {
+        report(error.message || "Could not open this SVG file.");
+      }
+    }
+
+    function makeExportHtml() {
+      const width = Number(sourceWidth.toFixed(4));
+      const height = Number(sourceHeight.toFixed(4));
+      const title = currentFileName.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[char]);
+      return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title} · SVG Viewer</title>
+<style>
+*{box-sizing:border-box}body{margin:0;height:100vh;overflow:hidden;display:flex;flex-direction:column;background:#edf1f6;color:#172d29;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}header{min-height:60px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#173b76;color:white;box-shadow:0 3px 14px #102c5730}strong{font-size:14px}.tools{display:flex;align-items:center;gap:7px}button{height:36px;min-width:38px;padding:0 11px;border:0;border-radius:8px;background:white;color:#173b76;font:700 12px system-ui;cursor:pointer}button:hover{background:#f8d9d6;color:#a32b2b}#zoom{min-width:48px;text-align:center;font-size:11px;font-variant-numeric:tabular-nums}#stage{position:relative;flex:1;min-height:0;overflow:hidden;touch-action:none;cursor:grab;background-color:#e8edf3;background-image:radial-gradient(#cbd4df 1px,transparent 1px);background-size:20px 20px}#stage.dragging{cursor:grabbing}#drawing{position:absolute;left:0;top:0;max-width:none;max-height:none;user-select:none;-webkit-user-drag:none;transform-origin:top left}.hint{position:absolute;left:13px;bottom:13px;padding:8px 10px;border:1px solid #dce3eb;border-radius:8px;background:#ffffffed;color:#596879;font-size:11px;pointer-events:none}@media(max-width:520px){header{align-items:flex-start;flex-direction:column}.tools{width:100%;flex-wrap:wrap}.hint{font-size:10px}}
+</style></head><body>
+<header><strong>${title}</strong><div class="tools"><button id="out" title="Zoom out" aria-label="Zoom out">−</button><span id="zoom">100%</span><button id="in" title="Zoom in" aria-label="Zoom in">+</button><button id="fit">Fit</button><button id="reset">Reset</button><button id="full">Full screen</button></div></header>
+<main id="stage" aria-label="SVG pan and zoom canvas"><img id="drawing" src="${currentSvgData}" alt="${title}"><div class="hint">Scroll to zoom · Drag to pan · Press 0 to fit</div></main>
+<script>
+const stage=document.getElementById("stage"),img=document.getElementById("drawing"),zoomLabel=document.getElementById("zoom");let s=1,x=0,y=0,bx=0,by=0,bw=1,bh=1,drag=null;const min=.25,max=16;
+function render(){img.style.transform="translate3d("+x+"px,"+y+"px,0) scale("+s+")";zoomLabel.textContent=Math.round(s*100)+"%"}
+function fit(){const r=stage.getBoundingClientRect(),k=Math.min(r.width/${width},r.height/${height})*.94;bw=${width}*k;bh=${height}*k;bx=(r.width-bw)/2;by=(r.height-bh)/2;img.style.width=bw+"px";img.style.height=bh+"px";img.style.left=bx+"px";img.style.top=by+"px";s=1;x=0;y=0;render()}
+function zoomAt(n,cx,cy){n=Math.max(min,Math.min(max,n));const r=stage.getBoundingClientRect(),px=(cx??r.left+r.width/2)-r.left,py=(cy??r.top+r.height/2)-r.top,q=n/s;x=px-bx-(px-bx-x)*q;y=py-by-(py-by-y)*q;s=n;render()}
+document.getElementById("in").onclick=()=>zoomAt(s*1.25);document.getElementById("out").onclick=()=>zoomAt(s/1.25);document.getElementById("fit").onclick=fit;document.getElementById("reset").onclick=fit;document.getElementById("full").onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
+stage.addEventListener("wheel",e=>{e.preventDefault();zoomAt(s*(e.deltaY<0?1.12:1/1.12),e.clientX,e.clientY)},{passive:false});stage.addEventListener("pointerdown",e=>{if(e.button!==0)return;e.preventDefault();drag={id:e.pointerId,px:e.clientX,py:e.clientY,x,y};stage.setPointerCapture(e.pointerId);stage.classList.add("dragging")});stage.addEventListener("pointermove",e=>{if(!drag||drag.id!==e.pointerId)return;x=drag.x+e.clientX-drag.px;y=drag.y+e.clientY-drag.py;render()});function end(e){if(drag&&drag.id===e.pointerId)drag=null;stage.classList.remove("dragging")}stage.addEventListener("pointerup",end);stage.addEventListener("pointercancel",end);window.addEventListener("resize",fit);window.addEventListener("keydown",e=>{if(e.key==="0")fit();if(e.key==="+")zoomAt(s*1.25);if(e.key==="-")zoomAt(s/1.25)});img.onload=fit;if(img.complete)fit();
+<\/script></body></html>`;
+    }
+
+    document.getElementById("export-button").addEventListener("click", () => {
+      if (!currentSvgData) return;
+      const blob = new Blob([makeExportHtml()], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = currentFileName.replace(/\.svg$/i, "") + "-viewer.html";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
+
+    document.getElementById("open-button").addEventListener("click", () => picker.click());
+    picker.addEventListener("change", () => { openFile(picker.files[0]); picker.value = ""; });
+    document.getElementById("zoom-in").addEventListener("click", () => zoomAt(scale * 1.25));
+    document.getElementById("zoom-out").addEventListener("click", () => zoomAt(scale / 1.25));
+    document.getElementById("fit-button").addEventListener("click", fitDrawing);
+    document.getElementById("reset-button").addEventListener("click", fitDrawing);
+    document.getElementById("fullscreen-button").addEventListener("click", async () => {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+      else await document.exitFullscreen?.();
+    });
+    canvas.addEventListener("wheel", event => {
+      if (!drawing.src) return;
+      event.preventDefault();
+      zoomAt(scale * (event.deltaY < 0 ? 1.12 : 1 / 1.12), event.clientX, event.clientY);
+    }, { passive: false });
+    canvas.addEventListener("pointerdown", event => {
+      if (!drawing.src || event.button !== 0) return;
+      event.preventDefault();
+      drag = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, x, y };
+      canvas.setPointerCapture(event.pointerId);
+      canvas.classList.add("dragging");
+    });
+    canvas.addEventListener("pointermove", event => {
+      if (!drag || drag.pointerId !== event.pointerId) return;
+      x = drag.x + event.clientX - drag.startX;
+      y = drag.y + event.clientY - drag.startY;
+      render();
+    });
+    function endDrag(event) {
+      if (drag && drag.pointerId === event.pointerId) drag = null;
+      canvas.classList.remove("dragging");
+    }
+    canvas.addEventListener("pointerup", endDrag);
+    canvas.addEventListener("pointercancel", endDrag);
+    ["dragenter", "dragover"].forEach(type => canvas.addEventListener(type, event => {
+      event.preventDefault();
+      canvas.classList.add("drag-over");
+    }));
+    ["dragleave", "drop"].forEach(type => canvas.addEventListener(type, event => {
+      event.preventDefault();
+      canvas.classList.remove("drag-over");
+    }));
+    canvas.addEventListener("drop", event => openFile(event.dataTransfer.files[0]));
+    window.addEventListener("resize", () => { if (drawing.src) fitDrawing(); });
+    window.addEventListener("keydown", event => {
+      if (event.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return;
+      if (event.key === "+" || event.key === "=") zoomAt(scale * 1.25);
+      if (event.key === "-") zoomAt(scale / 1.25);
+      if (event.key === "0") fitDrawing();
+    });
+  </script>
+</body>
+</html>
